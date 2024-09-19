@@ -1,0 +1,21 @@
+{
+  "name": "cbd-gm-api",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/main.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node src/main.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@nastyox/rando.js": "^2.0.6",
+    "axios": "^1.7.7",
+    "crypto": "^1.0.1",
+    "express": "^4.19.2",
+    "kafkajs": "^2.2.4",
+    "mongoose": "^8.6.0"
+  }
+}
