@@ -9,12 +9,14 @@ const dungeons = {};
 router.post('/', (req, res) => {
     const {owner} = req.body;
     let uuid = randomUUID().toString();
+    let dm = new DungeonMaster(owner);
     dungeons[uuid] = {
         uuid,
         owner,
         ws: '/ws?dungeon=' + uuid,
-        dm: new DungeonMaster(owner)
+        dm
     };
+    dm.startGame();
 });
 
 router.get('/:uuid', (req, res) => {
