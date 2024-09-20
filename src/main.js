@@ -1,24 +1,11 @@
 import express from 'express';
 import dungeonRoute from './routes/dungeonRoute.js';
 import DungeonMaster from './service/DungeonMaster.js';
+import { startWebsocketServer } from './service/WebSocketServer.js';
 
 let app = express();
 
 app.use('/dungeon', dungeonRoute);
 
 app.listen(3001);
-
-// TEST CODE
-// (async() => {
-//     let dm = new DungeonMaster("12345678");
-//     await dm.startGame();
-//     await dm.addPlayer("thetruekingofspace");
-//     dm.addMonster("GATO");
-//     dm.attack("thetruekingofspace", `~M1`);
-//     dm.attack("~M1", "thetruekingofspace");
-//     dm.resetCooldown("thetruekingofspace");
-//     dm.resetCooldown("thetruekingofspace");
-//     dm.use("thetruekingofspace", null, "HEALING_SHOWER");
-//     dm.resetCooldown("thetruekingofspace");
-//     dm.use("thetruekingofspace", null, "POWER_SHOWER");
-// })();
+startWebsocketServer(3002);

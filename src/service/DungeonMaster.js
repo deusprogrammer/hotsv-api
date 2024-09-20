@@ -34,8 +34,11 @@ export default class DungeonMaster {
         this.monsterTable = monsterTable;
         this.jobTable = jobTable;
 
-        // Start main loop
-        this.mainLoop();
+        // Connect to websocket
+        
+
+        // Start main loop to run every 5 seconds
+        setInterval(this.mainLoop, 1000 * 5);
     }
 
     addPlayer = async playerId => {
@@ -190,6 +193,240 @@ export default class DungeonMaster {
     }
 
     mainLoop = async () => {
-        // Handle all timing based things like monsters acting after cool down is done and buffs and dot's procing and expiring
+    //     // Check for chatter activity timeouts
+    //     for (let username in botContext.chattersActive) {
+    //         botContext.chattersActive[username] -= 1;
+    //         if (botContext.chattersActive[username] === 0) {
+    //             delete botContext.chattersActive[username];
+    //             EventQueue.sendInfoToChat(`${username} has stepped back into the shadows.`);
+    //         }
+    //     };
+
+    //     // Tick down human cooldowns
+    //     for (let username in cooldownTable) {
+    //         cooldownTable[username] -= 1;
+    //         if (cooldownTable[username] <= 0) {
+    //             delete cooldownTable[username];
+    //             EventQueue.sendInfoToChat(`${username} can act again.`);
+    //             let user = Xhr.getUser(username);
+    //             EventQueue.sendEventToUser(user, {
+    //                 type: "COOLDOWN_OVER"
+    //             });
+    //         }
+    //     };
+
+    //     // Tick down buff timers
+    //     for(let username in buffTable) {
+    //         let buffs = buffTable[username] || [];
+    //         buffs.forEach((buff) => {
+    //             buff.duration--;
+
+    //             if (buff.duration <= 0) {
+    //                 let expandedUsername = username;
+    //                 if (username.startsWith("~")) {
+    //                     expandedUsername = "Unknown";
+    //                     let monster = encounterTable[username.slice(1)];
+    //                     if (monster) {
+    //                         expandedUsername = monster.name || "Unknown";
+    //                     }
+    //                 }
+    //                 EventQueue.sendInfoToChat(`${expandedUsername}'s ${buff.name} buff has worn off.`);
+    //             }
+    //         });
+    //         buffTable[username] = buffs.filter(buff => buff.duration > 0);
+
+    //         // If not a monster, send buff updates to user
+    //         if (!username.startsWith("~")) {
+    //             let user = await Xhr.getUser(username);
+    //             EventQueue.sendEventToUser(user,{
+    //                 type: "BUFF_UPDATE",
+    //                 data: {
+    //                     buffs: buffTable[username]
+    //                 }
+    //             });
+    //         }
+    //     };
+
+    //     // Tick down status timers
+    //     for (let username in dotTable) {
+    //         let effects = dotTable[username];
+    //         for (let effect of effects) {
+    //             effect.tickCounter--;
+    //             if (effect.tickCounter <= 0) {
+    //                 effect.tickCounter = effect.ability.procTime;
+    //                 effect.cycles--;
+
+    //                 // Perform damage
+    //                 let defender = null;
+    //                 try {
+    //                     defender = await Commands.getTarget(username, pluginContext);
+    //                     if (defender.hp <= 0) {
+    //                         effect.cycles = 0;
+    //                         continue;
+    //                     }
+    //                 } catch (e) {
+    //                     effect.cycles = 0;
+    //                     break;
+    //                 }
+    //                 let damageRoll = Util.rollDice(effect.ability.dmg);
+            
+    //                 if (!defender.isMonster) {
+    //                     let adjustments = {};
+    //                     adjustments[effect.ability.damageStat] = - damageRoll;
+    //                     await Xhr.adjustStats({name: username}, adjustments);
+
+    //                     sendContextUpdate([user], botContext, true);
+    //                 } else {
+    //                     defender.hp -= damageRoll;
+    //                 }
+
+    //                 // Send panel update
+    //                 EventQueue.sendEvent({
+    //                     type: "ATTACKED",
+    //                     targets: ["chat", "panel"],
+    //                     eventData: {
+    //                         results: {
+    //                             defender,
+    //                             message: `${defender.name} took ${damageRoll} damage from ${effect.ability.name} ${defender.hp <= 0 ? " and died." : "."}`
+    //                         },
+    //                         encounterTable
+    //                     }
+    //                 });
+
+    //                 // Send update to all users if monster died.
+    //                 if (defender.hp <= 0 && defender.isMonster) {
+    //                     effect.cycles = 0;
+
+    //                     delete encounterTable[defender.spawnKey];
+
+    //                     let itemGets = await Commands.distributeLoot(defender, pluginContext);
+    //                     itemGets.forEach((itemGet) => {
+    //                         EventQueue.sendEvent(itemGet);
+    //                     });
+
+    //                     continue;
+    //                 }
+
+    //                 if (effect.cycles <= 0) {
+    //                     EventQueue.sendInfoToChat(`${defender.name}'s ${effect.ability.name} status has worn off.`);
+    //                 }
+    //             }
+    //         }
+    //         dotTable[username] = effects.filter(effect => effect.cycles > 0);
+
+    //         // If not a monster, send effect updates to user
+    //         if (!username.startsWith("~")) {
+    //             let user = await Xhr.getUser(username);
+    //             EventQueue.sendEventToUser(user, {
+    //                 type: "STATUS_UPDATE",
+    //                 data: {
+    //                     effects: dotTable[username]
+    //                 }
+    //             });
+    //         }
+    //     }
+
+    //     // Do monster attacks
+    //     for (let encounterName in encounterTable) {
+    //         let encounter = encounterTable[encounterName];
+
+    //         if (encounter.hp <= 0) {
+    //             return;
+    //         }
+
+    //         // If the monster has no tick, reset it.
+    //         if (encounter.tick === undefined) {
+    //             let buffs = Commands.createBuffMap("~" + encounter.name, pluginContext);
+    //             encounter.tick = Math.min(11, 6 - Math.min(5, encounter.dex + buffs.dex));
+    //         }
+
+    //         // If cooldown timer for monster is now zero, do an attack.
+    //         if (encounter.tick === 0) {
+    //             let buffs = Commands.createBuffMap("~" + encounter.name, pluginContext);
+    //             encounter.tick = Math.min(11, 6 - Math.min(5, encounter.dex + buffs.dex));
+
+    //             // If no aggro, pick randomly.  If aggro, pick highest damage dealt.
+    //             let target = null;
+    //             if (!encounter.aggro || Object.keys(encounter.aggro).length <= 0) {
+    //                 let activeUsers = await Xhr.getActiveUsers(pluginContext);
+
+    //                 if (activeUsers.length > 0) {
+    //                     target = activeUsers[Math.floor(Math.random() * Math.floor(activeUsers.length))];
+    //                 }
+    //             } else {
+    //                 Object.keys(encounter.aggro).forEach((attackerName) => {
+    //                     let attackerAggro = encounter.aggro[attackerName];
+    //                     if (target === null) {
+    //                         target = attackerName;
+    //                         return;
+    //                     }
+
+    //                     if (attackerAggro > encounter.aggro[target]) {
+    //                         target = attackerName;
+    //                     }
+    //                 });
+    //             }
+
+    //             // If a target was found
+    //             if (target !== null) {
+    //                 // Check for ability triggers.
+    //                 let chanceSum = 0;
+    //                 encounter.actions.forEach((action) => {
+    //                     chanceSum += action.chance;
+    //                 });
+
+    //                 // Roll dice
+    //                 let diceRoll = Util.rollDice("1d" + chanceSum);
+                    
+    //                 // Figure out which action triggers
+    //                 let lowerThreshold = 0;
+    //                 let triggeredAction = "ATTACK";
+    //                 let ability = null;
+    //                 encounter.actions.forEach((action) => {
+    //                     let upperThreshold = lowerThreshold + action.chance;
+
+    //                     if (diceRoll > lowerThreshold && diceRoll <= upperThreshold) {
+    //                         triggeredAction = action.abilityId;
+    //                         ability = abilityTable[triggeredAction];
+    //                     }
+
+    //                     lowerThreshold = upperThreshold;
+    //                 });
+
+    //                 if (triggeredAction !== "ATTACK" && ability.area === "ONE") {
+    //                     EventQueue.sendInfoToChat(`${encounter.name} uses ${ability.name}`);
+    //                     if (ability.target === "ENEMY") {
+    //                         await Commands.use("~" + encounterName, target, ability, pluginContext);
+    //                     } else {
+    //                         if (ability.element === "HEALING") {
+    //                             let lowestHP = encounter;
+    //                             let lowestHPKey = encounterName;
+    //                             for (otherEncounterKey in encounterTable) {
+    //                                 let otherEncounter = encounterTable[otherEncounterKey];
+    //                                 if (otherEncounter.hp < lowestHP.hp) {
+    //                                     lowestHP = otherEncounter;
+    //                                     lowestHPKey = otherEncounterKey;
+    //                                 }
+    //                             }
+
+    //                             await Commands.use("~" + encounterName, "~" + lowestHPKey, ability, pluginContext);
+    //                         } else if (ability.element === "CLEANSING") {
+    //                             // TODO Add cleansing AI
+    //                         }
+    //                     }
+    //                 } else if (triggeredAction !== "ATTACK" && ability.area === "ALL") {
+    //                     EventQueue.sendInfoToChat(`${encounter.name} uses ${ability.name}`);
+    //                     await Commands.use("~" + encounterName, null, ability, pluginContext);
+    //                 } else {
+    //                     await Commands.attack("~" + encounterName, target, pluginContext);
+    //                 }
+
+    //                 return;
+    //             }
+    //         }
+
+    //         encounter.tick--;
+    //     };
+    // }
     }
 }
