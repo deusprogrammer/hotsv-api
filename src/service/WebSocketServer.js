@@ -14,6 +14,16 @@ const hmacSHA1 = (hmacSecret, data) => {
 const users = {};
 const dungeons = {};
 
+// Heartbeat interval
+const sockets = [];
+setInterval(() => {
+    sockets.forEach((ws) => {
+        ws.send(JSON.stringify({
+            event: "PING"
+        }));
+    });
+}, 30 * 1000);
+
 export const startWebsocketServer = (port) => {
     // Setup websocket server for communicating with the panel
     const wss = new WebSocket.Server({ port });
@@ -22,34 +32,45 @@ export const startWebsocketServer = (port) => {
     wss.on('connection', async (ws) => {
         console.log("CONNECTION");
 
+        if (!(ws in sockets)) {
+            sockets.push(ws);
+        }
+
         ws.on('close', async () => {
+            // TODO Clean up users and dungeons when they disconnect
             console.log("Websocket closed, cleaning up.");
-
-            // Remove dead connections (TODO this apparently doesn't work perfectly yet)
-            Object.keys(clients).filter((key) => {return clients[key].readyState !== WebSocket.OPEN}).forEach((key) => {
-                console.log("Removing dead connection for client: " + key);
-                delete clients[key];
-
-                // Close websockets that are connected to bot
-                let channelId = key.replace("BOT-", "");
-                panels[channelId].forEach((panel) => {
-                    panel.close();
-                });
-                delete panels[channelId];
-            });
-
-            // Remove dead panels
-            Object.keys(panels).forEach((channelId) => {
-                let channelPanels = panels[channelId];
-                panels[channelId] = channelPanels.filter((channelPanel) => {return channelPanel.readyState === WebSocket.OPEN});
-            });
-
-            console.log("BOTS CONNECTED: " + Object.keys(clients).length);
         });
 
         ws.on('message', async (message) => {
             const messageData = JSON.parse(message);
             const { userType, event, channelId, jwtToken, data, signature } = messageData;
+
+            if (userType === 'PANEL') {
+                switch (event) {
+                    case 'JOIN': {
+                        if (!(channelId in dungeons)) {
+                            ws.send(JSON.stringify({ 
+                                event: "ERROR", 
+                                channelId, 
+                                message: "Cannot connect to dungeon: " + channelId
+                            }));
+                            ws.close();
+                            return;
+                        }
+
+                        dungeons[channelId].panels.push({
+                            ws
+                        });
+
+                        ws.send(JSON.stringify({ 
+                            event: 'JOINED', 
+                            channelId
+                        }));
+                        break;
+                    }
+                }
+                return;
+            }
 
             jwt.verify(
                 jwtToken,
@@ -106,6 +127,8 @@ export const startWebsocketServer = (port) => {
                                    ...dungeons[userId],
                                     channelId,
                                     signingKey: newSigningKey,
+                                    players: [],
+                                    panels: [],
                                     ws
                                 };
                             }
@@ -153,17 +176,27 @@ export const startWebsocketServer = (port) => {
                                 }));
                             }
 
-                            // Communicate with players
                             const dungeon = dungeons[channelId];
+
+                            // Communicate with players
                             dungeon.players.forEach(playerId => {
-                                const playerSigningKey = players[playerId].signingKey;
-                                const signature = hmacSHA1(playerSigningKey, JSON.stringify(data));
-                                playerId.ws.send(JSON.stringify({
+                                const {signingKey: playerSigningKey, ws: playerWs} = players[playerId];
+                                const playerSignature = hmacSHA1(playerSigningKey, JSON.stringify(data));
+
+                                playerWs.send(JSON.stringify({
                                     ...messageData,
-                                    signature,
+                                    signature: playerSignature,
+                                    jwtToken: null
+                                }));
+                            });
+
+                            // Communicate with panels
+                            dungeon.panels.forEach(({ws: panelWs}) => {
+                                panelWs.send(JSON.stringify({
+                                    ...messageData,
                                     jwtToken: null
                                  }));
-                             });
+                            });
 
                             break;
                         }
