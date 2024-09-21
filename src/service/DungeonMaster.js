@@ -1,8 +1,35 @@
+import WebSocket from 'ws';
+import jsonwebtoken from 'jsonwebtoken';
 import CBDClient from './CBDClient.js';
 import { attack, useAbility, createBuffMap, getTarget, spawnMonster, CommandResult } from '../components/commands.js';
 
 const cbdApiUrl = process.env.BATTLE_API_URL;
 const jwtToken = process.env.TWITCH_BOT_JWT;
+
+// Keys for jwt verification
+const sharedKey = process.env.TWITCH_SHARED_SECRET;
+
+const hmacSHA1 = (hmacSecret, data) => {
+    return crypto.createHmac('sha1', hmacSecret).update(data).digest().toString('base64');
+}
+
+const createExpirationDate = () => {
+    var d = new Date();
+    var year = d.getFullYear();
+    var month = d.getMonth();
+    var day = d.getDate();
+    var c = new Date(year + 1, month, day);
+    return c;
+}
+
+const createJwt = (secret) => {
+    return jsonwebtoken.sign({
+        "exp": createExpirationDate().getTime(),
+        "user_id": `DM-${channelId}`,
+        "role": "TWITCH_BOT",
+        "channel_id": channelId
+    }, secret);
+}
 
 export default class DungeonMaster {
     id;
@@ -21,6 +48,7 @@ export default class DungeonMaster {
 
     cbdClient;
     broadcasterId;
+    socket;
 
     constructor(broadcasterId) {
         this.broadcasterId = broadcasterId;
@@ -34,25 +62,48 @@ export default class DungeonMaster {
         this.monsterTable = monsterTable;
         this.jobTable = jobTable;
 
-        // Connect to websocket
+        // Setup websocket to communicate with extension
+        this.socket = new WebSocket('ws://localhost:3002');
         
+        this.socket.on('open', () => {
+            extWs.send(JSON.stringify({
+                event: "JOIN",
+                userType: "DM",
+                channelId,
+                jwtToken: createJwt(sharedKey)
+            }));
+        });
+
+        this.socket.on('message', (message) => {
+            let event = JSON.parse(message);
+            console.log("EVENT: " + JSON.stringify(event, null, 5));
+        });
+
+        this.socket.on('close', (e) => {
+
+        });
+
+        this.socket.on('error', (e) => {
+            console.error('Socket encountered error: ', e.message, 'Closing socket');
+            extWs.close();
+        });
 
         // Start main loop to run every 5 seconds
-        setInterval(this.mainLoop, 1000 * 5);
+        setInterval(this._mainLoop, 1000 * 5);
     }
 
-    addPlayer = async playerId => {
+    _addPlayer = async playerId => {
         const player = await this.cbdClient.getCharacter(playerId);
         this.players[playerId] = {...player, buffs: []};
     }
 
-    addMonster = (monsterName, personalName) => {
+    _addMonster = (monsterName, personalName) => {
         let monster = spawnMonster(monsterName, personalName, this);
         this.encounterTable[monster.spawnKey] = {...monster, buffs: []};
         return monster.spawnKey;
     }
 
-    removePlayer = async playerId => {
+    _removePlayer = async playerId => {
         let index = this.players.findIndex(player => playerId === player.name);
 
         if (index >= 0) {
@@ -60,7 +111,7 @@ export default class DungeonMaster {
         }
     }
 
-    attack = (attackerName, defenderName) => {
+    _attack = (attackerName, defenderName) => {
         if (this.cooldownTable[attackerName]) {
             throw `${attackerName} is on cooldown.`;
         }
@@ -68,7 +119,7 @@ export default class DungeonMaster {
         let results = attack(attackerName, defenderName, this);
 
         results.forEach((result) => {
-            this.handleResult(result);
+            this._handleResult(result);
         });
 
         // Set user cool down
@@ -77,7 +128,7 @@ export default class DungeonMaster {
         this.cooldownTable[attackerName] = Math.min(11, 6 - Math.min(5, attacker.dex + currBuffs.dex));
     }
 
-    use = (attackerName, defenderName, abilityName) => {
+    _use = (attackerName, defenderName, abilityName) => {
         if (this.cooldownTable[attackerName]) {
             throw `${attackerName} is on cooldown.`;
         }
@@ -134,7 +185,7 @@ export default class DungeonMaster {
         let results = useAbility(attackerName, defenderName, ability, this);
 
         results.forEach((result) => {
-            this.handleResult(result);
+            this._handleResult(result);
         });
 
         // If item, remove from inventory
@@ -147,11 +198,11 @@ export default class DungeonMaster {
         this.cooldownTable[attackerName] = Math.min(11, 6 - Math.min(5, attacker.dex + currBuffs.dex));
     }
 
-    getTargets = () => {
+    _getTargets = () => {
         return this.encounterTable;
     }
 
-    resetCooldown = (name) => {
+    _resetCooldown = (name) => {
         delete this.cooldownTable[name];
     }
 
@@ -159,7 +210,7 @@ export default class DungeonMaster {
      * 
      * @param {CommandResult} result 
      */
-    handleResult = (result) => {
+    _handleResult = (result) => {
         result.messages.forEach((message) => {
             console.log(`MESSAGE: ${message}`);
         });
@@ -189,10 +240,11 @@ export default class DungeonMaster {
             }
         });
 
-        result.triggeredResults.forEach(this.handleResult);
+        result.triggeredResults.forEach(this._handleResult);
     }
 
-    mainLoop = async () => {
+    _mainLoop = async () => {
+        // Use this.socket.send() to send messages to the server
     //     // Check for chatter activity timeouts
     //     for (let username in botContext.chattersActive) {
     //         botContext.chattersActive[username] -= 1;

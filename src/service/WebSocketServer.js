@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import WebSocket from 'ws';
-import { randomUuid } from '../utils';
+import { randomUuid } from '../utils.js';
 
 // Keys for jwt verification
 const key = process.env.TWITCH_SHARED_SECRET;
@@ -25,6 +25,7 @@ setInterval(() => {
 }, 30 * 1000);
 
 export const startWebsocketServer = (port) => {
+    console.log("Started websocket server");
     // Setup websocket server for communicating with the panel
     const wss = new WebSocket.Server({ port });
 
@@ -42,6 +43,7 @@ export const startWebsocketServer = (port) => {
         });
 
         ws.on('message', async (message) => {
+            console.log("MESSAGE: \n" + message);
             const messageData = JSON.parse(message);
             const { userType, event, channelId, jwtToken, data, signature } = messageData;
 
