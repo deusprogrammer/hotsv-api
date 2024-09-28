@@ -22,11 +22,11 @@ const createExpirationDate = () => {
     return c;
 }
 
-const createJwt = (secret) => {
+const createJwt = (secret, channelId) => {
     return jsonwebtoken.sign({
         "exp": createExpirationDate().getTime(),
         "user_id": `DM-${channelId}`,
-        "role": "TWITCH_BOT",
+        "role": "DM",
         "channel_id": channelId
     }, secret);
 }
@@ -66,17 +66,17 @@ export default class DungeonMaster {
         this.socket = new WebSocket('ws://localhost:3002');
         
         this.socket.on('open', () => {
-            extWs.send(JSON.stringify({
+            this.socket.send(JSON.stringify({
                 event: "JOIN",
                 userType: "DM",
-                channelId,
-                jwtToken: createJwt(sharedKey)
+                channelId: this.broadcasterId,
+                jwtToken: createJwt(sharedKey, this.broadcasterId)
             }));
         });
 
         this.socket.on('message', (message) => {
             let event = JSON.parse(message);
-            console.log("EVENT: " + JSON.stringify(event, null, 5));
+            // console.log("EVENT: " + JSON.stringify(event, null, 5));
         });
 
         this.socket.on('close', (e) => {

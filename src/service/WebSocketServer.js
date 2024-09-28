@@ -2,6 +2,10 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import WebSocket from 'ws';
 import { randomUuid } from '../utils.js';
+import CBDClient from './CBDClient.js';
+
+const cbdApiUrl = process.env.BATTLE_API_URL;
+const jwtToken  = process.env.TWITCH_BOT_JWT;
 
 // Keys for jwt verification
 const key = process.env.TWITCH_SHARED_SECRET;
@@ -24,9 +28,13 @@ setInterval(() => {
     });
 }, 30 * 1000);
 
-export const startWebsocketServer = (port) => {
+export const startWebsocketServer = async (port) => {
     console.log("Started websocket server");
-    // Setup websocket server for communicating with the panel
+
+    const cbdClient = new CBDClient(cbdApiUrl, jwtToken);
+    await cbdClient.loadGameData();
+    const gameContext = await cbdClient.getGameContext();
+
     const wss = new WebSocket.Server({ port });
 
     // Set up a websocket routing system
@@ -74,9 +82,11 @@ export const startWebsocketServer = (port) => {
                 return;
             }
 
+            const secret = userType === 'PLAYER'? defaultSecret : key;
+
             jwt.verify(
                 jwtToken,
-                defaultSecret,
+                secret,
                 async (err, decoded) => {
                     if (err) {
                         console.log("Error verifying JWT: " + err);
@@ -87,13 +97,15 @@ export const startWebsocketServer = (port) => {
                         }));
                     }
 
-                    const { user_id : userId, roles } = decoded;
+                    console.log("DECODED: " + JSON.stringify(decoded, null, 5));
+
+                    const { login: userId, role } = decoded;
                     let signingKey = "";
 
                     if (userType === "PLAYER") {
-                        signingKey = players[userId].signingKey;
+                        signingKey = users[userId]?.signingKey;
                     } else if (userType === 'DM') {
-                        signingKey = dms[userId].signingKey;
+                        signingKey = dungeons[userId]?.signingKey;
                     }
 
                     switch (event) {
@@ -110,18 +122,27 @@ export const startWebsocketServer = (port) => {
                                     return;
                                 }
 
+                                const playerData = await cbdClient.getCharacter(userId);
+
                                 users[userId] = {
                                     ...users[userId],
                                     channelId,
                                     signingKey: newSigningKey,
+                                    playerData,
                                     ws
                                 };
 
                                 if (!(userId in dungeons[channelId].players)) {
                                     dungeons[channelId].players.push(userId);
                                 }
+
+                                ws.send(JSON.stringify({
+                                    event: 'JOINED',
+                                    gameContext,
+                                    playerData
+                                }));
                             } else if (userType === 'DM') {
-                                if (!roles.includes("TWITCH_BOT")) {
+                                if (role !== 'DM' || userId !== `DM-${channelId}`) {
                                     ws.close();
                                 }
 
@@ -182,7 +203,7 @@ export const startWebsocketServer = (port) => {
 
                             // Communicate with players
                             dungeon.players.forEach(playerId => {
-                                const {signingKey: playerSigningKey, ws: playerWs} = players[playerId];
+                                const {signingKey: playerSigningKey, ws: playerWs} = users[playerId];
                                 const playerSignature = hmacSHA1(playerSigningKey, JSON.stringify(data));
 
                                 playerWs.send(JSON.stringify({

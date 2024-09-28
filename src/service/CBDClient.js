@@ -36,6 +36,9 @@ export default class CBDClient {
             }
         });
 
+        console.log("ID: " + characterId);
+        console.log("Character: " + JSON.stringify(character, null, 5));
+
         return expandUser(character, await this.getGameContext());
     };
 
@@ -69,7 +72,6 @@ export default class CBDClient {
                 Authorization: `Bearer ${this.jwtToken}`
             }
         });
-        console.log("ITEMS: " + JSON.stringify(items, null, 5));
         return indexArrayToMap(items);
     }
     
@@ -80,7 +82,6 @@ export default class CBDClient {
                 Authorization: `Bearer ${this.jwtToken}`
             }
         });
-        console.log("JOBS: " + JSON.stringify(jobs, null, 5));
         return indexArrayToMap(jobs);
     }
     
@@ -91,7 +92,6 @@ export default class CBDClient {
                 Authorization: `Bearer ${this.jwtToken}`
             }
         });
-        console.log("MONSTERS: " + JSON.stringify(monsters, null, 5));
         return indexArrayToMap(monsters);
     }
     
@@ -102,7 +102,6 @@ export default class CBDClient {
                 Authorization: `Bearer ${this.jwtToken}`
             }
         });
-        console.log("ABILITIES: " + JSON.stringify(abilities, null, 5));
         return indexArrayToMap(abilities);
     }
 }

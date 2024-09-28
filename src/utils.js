@@ -64,8 +64,8 @@ export const sign = (number) => {
 }
 
 export const expandUser = (userData, context) => {
-    console.log("USER: " + JSON.stringify(userData, null, 5));
-    console.log("CONTEXT: " + JSON.stringify(context, null, 5));
+    // console.log("USER: " + JSON.stringify(userData, null, 5));
+    // console.log("CONTEXT: " + JSON.stringify(context, null, 5));
 
     userData.totalAC = 0;
     userData.currentJob = context.jobTable[userData.currentJob.id];
