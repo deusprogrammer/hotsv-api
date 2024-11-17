@@ -5,7 +5,7 @@ import { startWebsocketServer } from './service/WebSocketServer.js';
 
 let app = express();
 
-app.use(express.json({limit: "50Mb"}))
+app.use(express.json({ limit: '50Mb' }));
 app.use(cors());
 
 app.use('/dungeons', dungeonRoute);

@@ -6,7 +6,7 @@ const router = Express.Router();
 const dungeons = {};
 
 router.post('/', (req, res) => {
-    const {owner} = req.body;
+    const { owner } = req.body;
     let process = spawn('node', ['src/game.js', owner], {});
 
     process.stdout?.on('data', (data) => {
@@ -15,12 +15,12 @@ router.post('/', (req, res) => {
 
     // Handle the child process's stderr data
     process.stderr?.on('data', (data) => {
-        console.error(`dm-${owner}-stderr: ${data}`); 
+        console.error(`dm-${owner}-stderr: ${data}`);
     });
-    
+
     // Handle the child process's exit event
     process.on('close', (code) => {
-        console.log(`child process exited with code ${code}`); 
+        console.log(`child process exited with code ${code}`);
     });
 
     dungeons[owner] = process;
@@ -28,7 +28,7 @@ router.post('/', (req, res) => {
 });
 
 router.delete('/:channelId', (req, res) => {
-    const {channelId} = req.params;
+    const { channelId } = req.params;
     dungeons[channelId]?.kill('SIGKILL');
     delete dungeons[channelId];
     return res.status(200).send();
