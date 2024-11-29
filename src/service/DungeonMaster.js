@@ -101,26 +101,29 @@ export default class DungeonMaster {
             }
 
             let {
-                action: { type, actor, target, argument },
+                action: { type, actor, targets, argument },
             } = JSON.parse(message);
 
             try {
                 switch (type) {
                     case 'PLAYER_JOIN':
                         console.log('PLAYER JOINED DUNGEON ' + actor);
+                        this.messages.push(actor + " joined dungeon");
                         this._addPlayer(actor);
                         break;
                     case 'PLAYER_LEAVE':
                         console.log('PLAYER LEFT DUNGEON ' + actor);
+                        this.messages.push(actor + " left dungeon");
                         this._removePlayer(actor);
                         break;
                     case 'SPAWN_MONSTER':
                         console.log('MONSTER ENTERED DUNGEON ' + actor);
+                        this.messages.push(actor + " appeared");
                         this._addMonster(actor);
                         break;
                     case 'ATTACK':
-                        console.log('PLAYER ' + actor + ' ATTACKED ' + target);
-                        this._attack(actor, target);
+                        console.log('PLAYER ' + actor + ' ATTACKED ' + targets[0]);
+                        this._attack(actor, targets[0]);
                         break;
                     case 'USE':
                         console.log(
@@ -131,7 +134,7 @@ export default class DungeonMaster {
                                 ' ON ' +
                                 target
                         );
-                        this._use(actor, target, argument);
+                        this._use(actor, targets, argument);
                         break;
                 }
 
@@ -350,18 +353,13 @@ export default class DungeonMaster {
         //             EventQueue.sendInfoToChat(`${username} has stepped back into the shadows.`);
         //         }
         //     };
-        //     // Tick down human cooldowns
-        //     for (let username in cooldownTable) {
-        //         cooldownTable[username] -= 1;
-        //         if (cooldownTable[username] <= 0) {
-        //             delete cooldownTable[username];
-        //             EventQueue.sendInfoToChat(`${username} can act again.`);
-        //             let user = Xhr.getUser(username);
-        //             EventQueue.sendEventToUser(user, {
-        //                 type: "COOLDOWN_OVER"
-        //             });
-        //         }
-        //     };
+        // Tick down human cooldowns
+        for (let username in this.cooldownTable) {
+            this.cooldownTable[username] -= 1;
+            if (this.cooldownTable[username] <= 0) {
+                delete this.cooldownTable[username];
+            }
+        };
         //     // Tick down buff timers
         //     for(let username in buffTable) {
         //         let buffs = buffTable[username] || [];
