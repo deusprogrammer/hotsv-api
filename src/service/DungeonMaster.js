@@ -93,7 +93,6 @@ export default class DungeonMaster {
         });
 
         this.socket.on('message', (message) => {
-            console.log('DM MESSAGE: ' + message);
             let { event } = JSON.parse(message);
 
             if (event !== 'ACTION') {
@@ -117,8 +116,8 @@ export default class DungeonMaster {
                         this._removePlayer(actor);
                         break;
                     case 'SPAWN_MONSTER':
-                        console.log('MONSTER ENTERED DUNGEON ' + actor);
-                        this.messages.push(actor + " appeared");
+                        console.log('MONSTER ENTERED DUNGEON ' + this.monsterTable[actor].name);
+                        this.messages.push(this.monsterTable[actor].name + " appeared");
                         this._addMonster(actor);
                         break;
                     case 'ATTACK':
@@ -132,13 +131,15 @@ export default class DungeonMaster {
                                 ' USED ' +
                                 argument +
                                 ' ON ' +
-                                target
+                                targets
                         );
-                        this._use(actor, targets, argument);
+                        this._use(actor, targets.length > 1 ? null : targets, argument);
                         break;
                 }
 
-                console.log("SENDING UPDATE MESSAGE");
+                // Filter out dead monsters
+                let keysToDelete = Object.keys(this.encounterTable).filter((key) => this.encounterTable[key].hp <= 0);
+                keysToDelete.forEach((key) => delete this.encounterTable[key]);
 
                 this.socket.send(
                     JSON.stringify({
@@ -313,6 +314,8 @@ export default class DungeonMaster {
                 console.log(
                     `${subject} [${action}] -> ${adjustmentKey}: ${adjustmentValue}`
                 );
+
+                console.log("MONSTERS: " + JSON.stringify(this.encounterTable, null, 5));
 
                 let subjectObject = getTarget(subject, this);
 

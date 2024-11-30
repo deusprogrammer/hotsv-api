@@ -434,7 +434,6 @@ const hurt = (
 
     if (dead) {
         if (defender.isMonster) {
-            delete encounterTable[defender.spawnKey];
             let lootDrops = distributeLoot(defender, context);
 
             // Assign loot drops
