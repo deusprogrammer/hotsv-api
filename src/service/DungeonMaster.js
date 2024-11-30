@@ -9,6 +9,7 @@ import {
     spawnMonster,
     CommandResult,
 } from '../components/commands.js';
+import { rollDice } from '../utils.js';
 
 const cbdApiUrl = process.env.BATTLE_API_URL;
 const jwtToken = process.env.TWITCH_BOT_JWT;
@@ -175,8 +176,26 @@ export default class DungeonMaster {
         setInterval(this._mainLoop, 1000 * 5);
     };
 
+    _broadcastUpdate = async () => {
+        this.socket.send(
+            JSON.stringify({
+                event: 'UPDATE',
+                channelId: this.broadcasterId,
+                jwtToken: createJwt(sharedKey, this.broadcasterId),
+                dungeon: {
+                    players: this.players,
+                    monsters: this.encounterTable,
+                    buffs: this.buffTable,
+                    dots: this.dotTable,
+                    messages: this.messages,
+                },
+            })
+        );
+    }
+
     _addPlayer = async (playerId) => {
         const player = await this.cbdClient.getCharacter(playerId);
+        player.hp = player.maxHp;
         this.players[playerId] = { ...player, buffs: [] };
     };
 
@@ -315,8 +334,6 @@ export default class DungeonMaster {
                     `${subject} [${action}] -> ${adjustmentKey}: ${adjustmentValue}`
                 );
 
-                console.log("MONSTERS: " + JSON.stringify(this.encounterTable, null, 5));
-
                 let subjectObject = getTarget(subject, this);
 
                 switch (action) {
@@ -344,18 +361,15 @@ export default class DungeonMaster {
         );
 
         result.triggeredResults.forEach(this._handleResult);
+
+        Object.keys(this.players).forEach((key) => {
+            console.log("PLAYER HP: " + this.players[key].hp);
+        });
     };
 
     _mainLoop = async () => {
+        const results = [];
         // Use this.socket.send() to send messages to the server
-        //     // Check for chatter activity timeouts
-        //     for (let username in botContext.chattersActive) {
-        //         botContext.chattersActive[username] -= 1;
-        //         if (botContext.chattersActive[username] === 0) {
-        //             delete botContext.chattersActive[username];
-        //             EventQueue.sendInfoToChat(`${username} has stepped back into the shadows.`);
-        //         }
-        //     };
         // Tick down human cooldowns
         for (let username in this.cooldownTable) {
             this.cooldownTable[username] -= 1;
@@ -363,7 +377,8 @@ export default class DungeonMaster {
                 delete this.cooldownTable[username];
             }
         };
-        //     // Tick down buff timers
+        
+        // Tick down buff timers
         //     for(let username in buffTable) {
         //         let buffs = buffTable[username] || [];
         //         buffs.forEach((buff) => {
@@ -392,7 +407,8 @@ export default class DungeonMaster {
         //             });
         //         }
         //     };
-        //     // Tick down status timers
+
+        // Tick down status timers
         //     for (let username in dotTable) {
         //         let effects = dotTable[username];
         //         for (let effect of effects) {
@@ -460,92 +476,121 @@ export default class DungeonMaster {
         //             });
         //         }
         //     }
-        //     // Do monster attacks
-        //     for (let encounterName in encounterTable) {
-        //         let encounter = encounterTable[encounterName];
-        //         if (encounter.hp <= 0) {
-        //             return;
-        //         }
-        //         // If the monster has no tick, reset it.
-        //         if (encounter.tick === undefined) {
-        //             let buffs = Commands.createBuffMap("~" + encounter.name, pluginContext);
-        //             encounter.tick = Math.min(11, 6 - Math.min(5, encounter.dex + buffs.dex));
-        //         }
-        //         // If cooldown timer for monster is now zero, do an attack.
-        //         if (encounter.tick === 0) {
-        //             let buffs = Commands.createBuffMap("~" + encounter.name, pluginContext);
-        //             encounter.tick = Math.min(11, 6 - Math.min(5, encounter.dex + buffs.dex));
-        //             // If no aggro, pick randomly.  If aggro, pick highest damage dealt.
-        //             let target = null;
-        //             if (!encounter.aggro || Object.keys(encounter.aggro).length <= 0) {
-        //                 let activeUsers = await Xhr.getActiveUsers(pluginContext);
-        //                 if (activeUsers.length > 0) {
-        //                     target = activeUsers[Math.floor(Math.random() * Math.floor(activeUsers.length))];
-        //                 }
-        //             } else {
-        //                 Object.keys(encounter.aggro).forEach((attackerName) => {
-        //                     let attackerAggro = encounter.aggro[attackerName];
-        //                     if (target === null) {
-        //                         target = attackerName;
-        //                         return;
-        //                     }
-        //                     if (attackerAggro > encounter.aggro[target]) {
-        //                         target = attackerName;
-        //                     }
-        //                 });
-        //             }
-        //             // If a target was found
-        //             if (target !== null) {
-        //                 // Check for ability triggers.
-        //                 let chanceSum = 0;
-        //                 encounter.actions.forEach((action) => {
-        //                     chanceSum += action.chance;
-        //                 });
-        //                 // Roll dice
-        //                 let diceRoll = Util.rollDice("1d" + chanceSum);
-        //                 // Figure out which action triggers
-        //                 let lowerThreshold = 0;
-        //                 let triggeredAction = "ATTACK";
-        //                 let ability = null;
-        //                 encounter.actions.forEach((action) => {
-        //                     let upperThreshold = lowerThreshold + action.chance;
-        //                     if (diceRoll > lowerThreshold && diceRoll <= upperThreshold) {
-        //                         triggeredAction = action.abilityId;
-        //                         ability = abilityTable[triggeredAction];
-        //                     }
-        //                     lowerThreshold = upperThreshold;
-        //                 });
-        //                 if (triggeredAction !== "ATTACK" && ability.area === "ONE") {
-        //                     EventQueue.sendInfoToChat(`${encounter.name} uses ${ability.name}`);
-        //                     if (ability.target === "ENEMY") {
-        //                         await Commands.use("~" + encounterName, target, ability, pluginContext);
-        //                     } else {
-        //                         if (ability.element === "HEALING") {
-        //                             let lowestHP = encounter;
-        //                             let lowestHPKey = encounterName;
-        //                             for (otherEncounterKey in encounterTable) {
-        //                                 let otherEncounter = encounterTable[otherEncounterKey];
-        //                                 if (otherEncounter.hp < lowestHP.hp) {
-        //                                     lowestHP = otherEncounter;
-        //                                     lowestHPKey = otherEncounterKey;
-        //                                 }
-        //                             }
-        //                             await Commands.use("~" + encounterName, "~" + lowestHPKey, ability, pluginContext);
-        //                         } else if (ability.element === "CLEANSING") {
-        //                             // TODO Add cleansing AI
-        //                         }
-        //                     }
-        //                 } else if (triggeredAction !== "ATTACK" && ability.area === "ALL") {
-        //                     EventQueue.sendInfoToChat(`${encounter.name} uses ${ability.name}`);
-        //                     await Commands.use("~" + encounterName, null, ability, pluginContext);
-        //                 } else {
-        //                     await Commands.attack("~" + encounterName, target, pluginContext);
-        //                 }
-        //                 return;
-        //             }
-        //         }
-        //         encounter.tick--;
-        //     };
-        // }
+
+        // Do monster attacks
+        for (let encounterName in this.encounterTable) {
+            console.log("HANDLING ENCOUNTER " + encounterName);
+            let encounter = this.encounterTable[encounterName];
+
+            console.log("CHECK IF DEAD");
+            if (encounter.hp <= 0) {
+                continue;
+            }
+
+            // If the monster has no tick, reset it.
+            console.log("CHECK IF MONSTER HAS A TICK COUNT");
+            if (encounter.tick === undefined) {
+                console.log("MONSTER HAS NO TICK COUNT");
+                let buffs = createBuffMap("~" + encounterName, this);
+                encounter.tick = Math.min(11, 6 - Math.min(5, encounter.dex + buffs.dex));
+            }
+
+            // If cooldown timer for monster is now zero, do an attack.
+            console.log("CHECK IF COOLDOWN IS DONE");
+            if (encounter.tick === 0) {
+                console.log("MONSTER IS READY TO FIGHT");
+                let buffs = createBuffMap("~" + encounterName, this);
+                encounter.tick = Math.min(11, 6 - Math.min(5, encounter.dex + buffs.dex));
+
+                // If no aggro, pick randomly.  If aggro, pick highest damage dealt.
+                console.log("PICKING AGGRO TARGET");
+                let target = null;
+                if (!encounter.aggro || Object.keys(encounter.aggro).length <= 0) {
+                    let activeUsers = Object.keys(this.players);
+                    if (activeUsers.length > 0) {
+                        target = activeUsers[Math.floor(Math.random() * Math.floor(activeUsers.length))];
+                    }
+                } else {
+                    Object.keys(encounter.aggro).forEach((attackerName) => {
+                        let attackerAggro = encounter.aggro[attackerName];
+                        if (target === null) {
+                            target = attackerName;
+                            return;
+                        }
+                        if (attackerAggro > encounter.aggro[target]) {
+                            target = attackerName;
+                        }
+                    });
+                }
+
+                // If a target was found
+                if (target !== null) {
+                    console.log("TARGET ACQUIRED");
+
+                    // Check for ability triggers.
+                    let chanceSum = 0;
+                    encounter.actions.forEach((action) => {
+                        chanceSum += action.chance;
+                    });
+
+                    // Roll dice
+                    let diceRoll = rollDice("1d" + chanceSum);
+
+                    // Figure out which action triggers
+                    console.log("PICKING A RESPONSE");
+                    let lowerThreshold = 0;
+                    let triggeredAction = "ATTACK";
+                    let ability = null;
+                    encounter.actions.forEach((action) => {
+                        let upperThreshold = lowerThreshold + action.chance;
+                        if (diceRoll > lowerThreshold && diceRoll <= upperThreshold) {
+                            triggeredAction = action.abilityId;
+                            ability = abilityTable[triggeredAction];
+                        }
+                        lowerThreshold = upperThreshold;
+                    });
+
+                    console.log("TRIGGERING ACTIONS");
+                    if (triggeredAction !== "ATTACK" && ability.area === "ONE") {
+                        this.messages.push(`${encounter.name} uses ${ability.name}`);
+                        if (ability.target === "ENEMY") {
+                            results.push(useAbility("~" + encounterName, target, ability, this));
+                        } else {
+                            if (ability.element === "HEALING") {
+                                let lowestHP = encounter;
+                                let lowestHPKey = encounterName;
+                                for (otherEncounterKey in this.encounterTable) {
+                                    let otherEncounter = this.encounterTable[otherEncounterKey];
+                                    if (otherEncounter.hp < lowestHP.hp) {
+                                        lowestHP = otherEncounter;
+                                        lowestHPKey = otherEncounterKey;
+                                    }
+                                }
+                                results.push(useAbility("~" + encounterName, "~" + lowestHPKey, ability, this));
+                            } else if (ability.element === "CLEANSING") {
+                                // TODO Add cleansing AI
+                            }
+                        }
+                    } else if (triggeredAction !== "ATTACK" && ability.area === "ALL") {
+                        this.messages.push(`${encounter.name} uses ${ability.name}`);
+                        results.push(useAbility("~" + encounterName, null, ability, this));
+                    } else {
+                        results.push(attack("~" + encounterName, target, this));
+                    }
+                }
+            }
+            encounter.tick--;
+        }
+
+        // Handle results
+        if (results.length > 0) {
+            results.forEach((resultList) => {
+                resultList.forEach((result) => {
+                    this._handleResult(result);
+                });
+            });
+            
+            this._broadcastUpdate();
+        }
     };
 }

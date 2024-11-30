@@ -57,7 +57,6 @@ export const startWebsocketServer = async (port) => {
         });
 
         ws.on('message', async (message) => {
-            console.log('MESSAGE: \n' + message);
             const messageData = JSON.parse(message);
             const {
                 userType,

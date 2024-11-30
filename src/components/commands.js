@@ -73,6 +73,15 @@ export class CommandResult {
         );
     };
 
+    withAdjustments = (subject, adjustments) => {
+        Object.keys(adjustments).forEach(stat => {
+            if (adjustments[stat]) {
+                this.withAdjustment(subject, stat, adjustments[stat]);
+            }
+        });
+        return this;
+    }
+
     withAdd = (subject, adjustmentKey, adjustmentValue) => {
         return this.withEvent(subject, ADD, adjustmentKey, adjustmentValue);
     };
@@ -386,6 +395,10 @@ const hurt = (
         console.log(
             'DEFENSE ADJUSTMENTS: ' +
                 JSON.stringify(defenderAdjustments, null, 5)
+        );
+        commandResult.withAdjustments(
+            defenderName,
+            defenderAdjustments
         );
     } else if (defender.isMonster && hit) {
         console.log(
@@ -830,8 +843,6 @@ export const spawnMonster = (monsterName, personalName, context) => {
     monster.actions = monsterCopy.actions.map((action) => {
         return { ...action };
     });
-
-    console.log('SPAWNED: ' + JSON.stringify(monster, null, 5));
 
     // Set type here temporarily until we add to DB
     let type = monster.type || 'MOB';
