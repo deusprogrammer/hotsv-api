@@ -434,9 +434,10 @@ export default class DungeonMaster {
             this.encounterTable[username].buffs = buffs.filter(buff => buff.duration > 0);
         };
 
-        // Tick down status timers
-        for (let username in this.dotTable) {
-            let effects = this.dotTable[username];
+        // Tick down status timers for players
+        for (let username in this.players) {
+            console.log(`DOTS BEFORE[${username}]: ${JSON.stringify(this.players[username].dots, null, 5)}`);
+            let effects = this.players[username].dots;
             for (let effect of effects) {
                 effect.tickCounter--;
                 if (effect.tickCounter <= 0) {
@@ -446,12 +447,13 @@ export default class DungeonMaster {
                     // Perform damage
                     let defender = null;
                     try {
-                        defender = getTarget(username, pluginContext);
+                        defender = getTarget(username, this);
                         if (defender.hp <= 0) {
                             effect.cycles = 0;
                             continue;
                         }
                     } catch (e) {
+                        console.error("Failed to get target");
                         effect.cycles = 0;
                         break;
                     }
@@ -478,7 +480,57 @@ export default class DungeonMaster {
                 }
             }
 
-            this.dotTable[username] = effects.filter(effect => effect.cycles > 0);
+            this.players[username].dots = effects.filter(effect => effect.cycles > 0);
+            console.log(`DOTS AFTER[${username}]: ${JSON.stringify(this.players[username].dots, null, 5)}`);
+        }
+        // Tick down status timers for monsters
+        for (let username in this.encounterTable) {
+            console.log(`DOTS BEFORE[${username}]: ${JSON.stringify(this.encounterTable[username].dots, null, 5)}`);
+            let effects = this.encounterTable[username].dots;
+            for (let effect of effects) {
+                effect.tickCounter--;
+                if (effect.tickCounter <= 0) {
+                    effect.tickCounter = effect.ability.procTime;
+                    effect.cycles--;
+
+                    // Perform damage
+                    let defender = null;
+                    try {
+                        defender = getTarget(username, this);
+                        if (defender.hp <= 0) {
+                            effect.cycles = 0;
+                            continue;
+                        }
+                    } catch (e) {
+                        console.error("Failed to get target");
+                        effect.cycles = 0;
+                        break;
+                    }
+
+                    let damageRoll = rollDice(effect.ability.dmg);
+
+                    commandResult.withAdjustment(username, effect.ability.damageStat, -damageRoll);
+                    this.messages.push(`${defender.name} took ${damageRoll} damage from ${effect.ability.name} ${defender.hp <= 0 ? " and died." : "."}`);
+
+                    // Send update to all users if monster died.
+                    if (defender.hp <= 0 && defender.isMonster) {
+                        effect.cycles = 0;
+                        delete this.encounterTable[defender.spawnKey];
+                        // TODO Reimplement loot distribution
+                        // let itemGets = distributeLoot(defender, pluginContext);
+                        // itemGets.forEach((itemGet) => {
+                        //     // EventQueue.sendEvent(itemGet);
+                        // });
+                        continue;
+                    }
+                    if (effect.cycles <= 0) {
+                        this.messages.push(`${defender.name}'s ${effect.ability.name} status has worn off.`);
+                    }
+                }
+            }
+
+            this.encounterTable[username].dots = effects.filter(effect => effect.cycles > 0);
+            console.log(`DOTS AFTER[${username}]: ${JSON.stringify(this.encounterTable[username].dots, null, 5)}`);
         }
 
         // Do monster attacks
@@ -503,7 +555,7 @@ export default class DungeonMaster {
                 // If no aggro, pick randomly.  If aggro, pick highest damage dealt.
                 let target = null;
                 if (!encounter.aggro || Object.keys(encounter.aggro).length <= 0) {
-                    let activeUsers = Object.keys(this.players);
+                    let activeUsers = Object.keys(this.players).filter((username) => this.players[username].hp >= 0);
                     if (activeUsers.length > 0) {
                         target = activeUsers[Math.floor(Math.random() * Math.floor(activeUsers.length))];
                     }
@@ -539,7 +591,7 @@ export default class DungeonMaster {
                         let upperThreshold = lowerThreshold + action.chance;
                         if (diceRoll > lowerThreshold && diceRoll <= upperThreshold) {
                             triggeredAction = action.abilityId;
-                            ability = abilityTable[triggeredAction];
+                            ability = this.abilityTable[triggeredAction];
                         }
                         lowerThreshold = upperThreshold;
                     });

@@ -507,7 +507,6 @@ const hurt = (
     }
 
     return commandResult
-        .withMessage(`[BATTLE]: ${message}  ${hit ? endStatus : ''}`)
         .withCritFlag(crit)
         .withHitFlag(hit)
         .withDeadFlag(dead);
