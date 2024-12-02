@@ -268,6 +268,23 @@ export const startWebsocketServer = async (port) => {
 
                         const dungeon = dungeons[channelId];
 
+                        let {to} = messageData;
+                        if (to) {
+                            const {
+                                signingKey: playerSigningKey,
+                                ws: playerWs,
+                            } = users[to];
+
+                            playerWs.send(
+                                JSON.stringify({
+                                    ...messageData,
+                                    signature: 'playerSignature',
+                                    jwtToken: null,
+                                })
+                            );
+                            break;
+                        }
+
                         // Communicate with players
                         dungeon.players.forEach((playerId) => {
                             const {
@@ -294,9 +311,26 @@ export const startWebsocketServer = async (port) => {
                                 })
                             );
                         });
-
                         break;
                     }
+                    case "ERROR":
+                        let {to} = messageData;
+                        if (to) {
+                            const {
+                                signingKey: playerSigningKey,
+                                ws: playerWs,
+                            } = users[to];
+
+                            playerWs.send(
+                                JSON.stringify({
+                                    ...messageData,
+                                    signature: 'playerSignature',
+                                    jwtToken: null,
+                                })
+                            );
+                            break;
+                        }
+                        break;
                 }
             });
         });

@@ -8,6 +8,7 @@ import {
     getTarget,
     spawnMonster,
     CommandResult,
+    distributeLoot,
 } from '../components/commands.js';
 import { rollDice } from '../utils.js';
 
@@ -107,34 +108,24 @@ export default class DungeonMaster {
             try {
                 switch (type) {
                     case 'PLAYER_JOIN':
-                        console.log('PLAYER JOINED DUNGEON ' + actor);
                         this.messages.push(actor + " joined dungeon");
                         this._addPlayer(actor);
                         break;
                     case 'PLAYER_LEAVE':
-                        console.log('PLAYER LEFT DUNGEON ' + actor);
                         this.messages.push(actor + " left dungeon");
                         this._removePlayer(actor);
                         break;
                     case 'SPAWN_MONSTER':
-                        console.log('MONSTER ENTERED DUNGEON ' + this.monsterTable[actor].name);
                         this.messages.push(this.monsterTable[actor].name + " appeared");
                         this._addMonster(actor);
                         break;
                     case 'ATTACK':
-                        console.log('PLAYER ' + actor + ' ATTACKED ' + targets[0]);
-                        this._attack(actor, targets[0]);
+                        this.messages.push(`${actor} attacks`);
+                        this._attack(actor, targets);
                         break;
                     case 'USE':
-                        console.log(
-                            'PLAYER ' +
-                                actor +
-                                ' USED ' +
-                                argument +
-                                ' ON ' +
-                                targets
-                        );
-                        this._use(actor, targets.length > 1 ? null : targets, argument);
+                        this.messages.push(`${actor} used ${argument}`);
+                        this._use(actor, targets, argument);
                         break;
                 }
 
@@ -142,22 +133,10 @@ export default class DungeonMaster {
                 let keysToDelete = Object.keys(this.encounterTable).filter((key) => this.encounterTable[key].hp <= 0);
                 keysToDelete.forEach((key) => delete this.encounterTable[key]);
 
-                this.socket.send(
-                    JSON.stringify({
-                        event: 'UPDATE',
-                        channelId: this.broadcasterId,
-                        jwtToken: createJwt(sharedKey, this.broadcasterId),
-                        dungeon: {
-                            players: this.players,
-                            monsters: this.encounterTable,
-                            buffs: this.buffTable,
-                            dots: this.dotTable,
-                            messages: this.messages,
-                        },
-                    })
-                );
+                this._broadcastUpdate();
             } catch (error) {
                 console.error('Error processing command: ' + error);
+                this._sendError(actor, error);
             }
         });
 
@@ -188,7 +167,39 @@ export default class DungeonMaster {
                     buffs: this.buffTable,
                     dots: this.dotTable,
                     messages: this.messages,
+                    cooldowns: this.cooldownTable
                 },
+            })
+        );
+    }
+
+    _sendUpdate = async (username) => {
+        this.socket.send(
+            JSON.stringify({
+                event: 'UPDATE',
+                channelId: this.broadcasterId,
+                to: username,
+                jwtToken: createJwt(sharedKey, this.broadcasterId),
+                dungeon: {
+                    players: this.players,
+                    monsters: this.encounterTable,
+                    buffs: this.buffTable,
+                    dots: this.dotTable,
+                    messages: this.messages,
+                    cooldowns: this.cooldownTable
+                },
+            })
+        );
+    }
+
+    _sendError = async (username, error) => {
+        this.socket.send(
+            JSON.stringify({
+                event: 'ERROR',
+                channelId: this.broadcasterId,
+                to: username,
+                jwtToken: createJwt(sharedKey, this.broadcasterId),
+                error
             })
         );
     }
@@ -361,14 +372,12 @@ export default class DungeonMaster {
         );
 
         result.triggeredResults.forEach(this._handleResult);
-
-        Object.keys(this.players).forEach((key) => {
-            console.log("PLAYER HP: " + this.players[key].hp);
-        });
     };
 
     _mainLoop = async () => {
         const results = [];
+        const commandResult = new CommandResult();
+
         // Use this.socket.send() to send messages to the server
         // Tick down human cooldowns
         for (let username in this.cooldownTable) {
@@ -379,131 +388,113 @@ export default class DungeonMaster {
         };
         
         // Tick down buff timers
-        //     for(let username in buffTable) {
-        //         let buffs = buffTable[username] || [];
-        //         buffs.forEach((buff) => {
-        //             buff.duration--;
-        //             if (buff.duration <= 0) {
-        //                 let expandedUsername = username;
-        //                 if (username.startsWith("~")) {
-        //                     expandedUsername = "Unknown";
-        //                     let monster = encounterTable[username.slice(1)];
-        //                     if (monster) {
-        //                         expandedUsername = monster.name || "Unknown";
-        //                     }
-        //                 }
-        //                 EventQueue.sendInfoToChat(`${expandedUsername}'s ${buff.name} buff has worn off.`);
-        //             }
-        //         });
-        //         buffTable[username] = buffs.filter(buff => buff.duration > 0);
-        //         // If not a monster, send buff updates to user
-        //         if (!username.startsWith("~")) {
-        //             let user = await Xhr.getUser(username);
-        //             EventQueue.sendEventToUser(user,{
-        //                 type: "BUFF_UPDATE",
-        //                 data: {
-        //                     buffs: buffTable[username]
-        //                 }
-        //             });
-        //         }
-        //     };
+        for(let username in this.players) {
+            console.log(`BUFFS[${username}]: ${JSON.stringify(this.players[username].buffs, null, 5)}`);
+            let buffs = this.players[username].buffs;
+            buffs.forEach((buff) => {
+                buff.duration--;
+                if (buff.duration <= 0) {
+                    let expandedUsername = username;
+                    if (username.startsWith("~")) {
+                        expandedUsername = "Unknown";
+                        let monster = this.encounterTable[username.slice(1)];
+                        if (monster) {
+                            expandedUsername = monster.name || "Unknown";
+                        }
+                    }
+                    console.log(`${expandedUsername}'s ${buff.name} buff has worn off.`);
+                    this.messages.push(`${expandedUsername}'s ${buff.name} buff has worn off.`);
+                }
+            });
+            this.players[username].buffs = buffs.filter(buff => buff.duration > 0);
+        };
+        for(let username in this.encounterTable) {
+            console.log(`BUFFS[${username}]: ${JSON.stringify(this.encounterTable[username].buffs, null, 5)}`);
+            let buffs = this.encounterTable[username].buffs;
+            buffs.forEach((buff) => {
+                buff.duration--;
+                if (buff.duration <= 0) {
+                    let expandedUsername = username;
+                    if (username.startsWith("~")) {
+                        expandedUsername = "Unknown";
+                        let monster = this.encounterTable[username.slice(1)];
+                        if (monster) {
+                            expandedUsername = monster.name || "Unknown";
+                        }
+                    }
+                    this.messages.push(`${expandedUsername}'s ${buff.name} buff has worn off.`);
+                }
+            });
+            this.encounterTable[username].buffs = buffs.filter(buff => buff.duration > 0);
+        };
 
         // Tick down status timers
-        //     for (let username in dotTable) {
-        //         let effects = dotTable[username];
-        //         for (let effect of effects) {
-        //             effect.tickCounter--;
-        //             if (effect.tickCounter <= 0) {
-        //                 effect.tickCounter = effect.ability.procTime;
-        //                 effect.cycles--;
-        //                 // Perform damage
-        //                 let defender = null;
-        //                 try {
-        //                     defender = await Commands.getTarget(username, pluginContext);
-        //                     if (defender.hp <= 0) {
-        //                         effect.cycles = 0;
-        //                         continue;
-        //                     }
-        //                 } catch (e) {
-        //                     effect.cycles = 0;
-        //                     break;
-        //                 }
-        //                 let damageRoll = Util.rollDice(effect.ability.dmg);
-        //                 if (!defender.isMonster) {
-        //                     let adjustments = {};
-        //                     adjustments[effect.ability.damageStat] = - damageRoll;
-        //                     await Xhr.adjustStats({name: username}, adjustments);
-        //                     sendContextUpdate([user], botContext, true);
-        //                 } else {
-        //                     defender.hp -= damageRoll;
-        //                 }
-        //                 // Send panel update
-        //                 EventQueue.sendEvent({
-        //                     type: "ATTACKED",
-        //                     targets: ["chat", "panel"],
-        //                     eventData: {
-        //                         results: {
-        //                             defender,
-        //                             message: `${defender.name} took ${damageRoll} damage from ${effect.ability.name} ${defender.hp <= 0 ? " and died." : "."}`
-        //                         },
-        //                         encounterTable
-        //                     }
-        //                 });
-        //                 // Send update to all users if monster died.
-        //                 if (defender.hp <= 0 && defender.isMonster) {
-        //                     effect.cycles = 0;
-        //                     delete encounterTable[defender.spawnKey];
-        //                     let itemGets = await Commands.distributeLoot(defender, pluginContext);
-        //                     itemGets.forEach((itemGet) => {
-        //                         EventQueue.sendEvent(itemGet);
-        //                     });
-        //                     continue;
-        //                 }
-        //                 if (effect.cycles <= 0) {
-        //                     EventQueue.sendInfoToChat(`${defender.name}'s ${effect.ability.name} status has worn off.`);
-        //                 }
-        //             }
-        //         }
-        //         dotTable[username] = effects.filter(effect => effect.cycles > 0);
-        //         // If not a monster, send effect updates to user
-        //         if (!username.startsWith("~")) {
-        //             let user = await Xhr.getUser(username);
-        //             EventQueue.sendEventToUser(user, {
-        //                 type: "STATUS_UPDATE",
-        //                 data: {
-        //                     effects: dotTable[username]
-        //                 }
-        //             });
-        //         }
-        //     }
+        for (let username in this.dotTable) {
+            let effects = this.dotTable[username];
+            for (let effect of effects) {
+                effect.tickCounter--;
+                if (effect.tickCounter <= 0) {
+                    effect.tickCounter = effect.ability.procTime;
+                    effect.cycles--;
+
+                    // Perform damage
+                    let defender = null;
+                    try {
+                        defender = getTarget(username, pluginContext);
+                        if (defender.hp <= 0) {
+                            effect.cycles = 0;
+                            continue;
+                        }
+                    } catch (e) {
+                        effect.cycles = 0;
+                        break;
+                    }
+
+                    let damageRoll = rollDice(effect.ability.dmg);
+
+                    commandResult.withAdjustment(username, effect.ability.damageStat, -damageRoll);
+                    this.messages.push(`${defender.name} took ${damageRoll} damage from ${effect.ability.name} ${defender.hp <= 0 ? " and died." : "."}`);
+
+                    // Send update to all users if monster died.
+                    if (defender.hp <= 0 && defender.isMonster) {
+                        effect.cycles = 0;
+                        delete this.encounterTable[defender.spawnKey];
+                        // TODO Reimplement loot distribution
+                        // let itemGets = distributeLoot(defender, pluginContext);
+                        // itemGets.forEach((itemGet) => {
+                        //     // EventQueue.sendEvent(itemGet);
+                        // });
+                        continue;
+                    }
+                    if (effect.cycles <= 0) {
+                        this.messages.push(`${defender.name}'s ${effect.ability.name} status has worn off.`);
+                    }
+                }
+            }
+
+            this.dotTable[username] = effects.filter(effect => effect.cycles > 0);
+        }
 
         // Do monster attacks
         for (let encounterName in this.encounterTable) {
-            console.log("HANDLING ENCOUNTER " + encounterName);
             let encounter = this.encounterTable[encounterName];
 
-            console.log("CHECK IF DEAD");
             if (encounter.hp <= 0) {
                 continue;
             }
 
             // If the monster has no tick, reset it.
-            console.log("CHECK IF MONSTER HAS A TICK COUNT");
             if (encounter.tick === undefined) {
-                console.log("MONSTER HAS NO TICK COUNT");
                 let buffs = createBuffMap("~" + encounterName, this);
                 encounter.tick = Math.min(11, 6 - Math.min(5, encounter.dex + buffs.dex));
             }
 
             // If cooldown timer for monster is now zero, do an attack.
-            console.log("CHECK IF COOLDOWN IS DONE");
             if (encounter.tick === 0) {
-                console.log("MONSTER IS READY TO FIGHT");
                 let buffs = createBuffMap("~" + encounterName, this);
                 encounter.tick = Math.min(11, 6 - Math.min(5, encounter.dex + buffs.dex));
 
                 // If no aggro, pick randomly.  If aggro, pick highest damage dealt.
-                console.log("PICKING AGGRO TARGET");
                 let target = null;
                 if (!encounter.aggro || Object.keys(encounter.aggro).length <= 0) {
                     let activeUsers = Object.keys(this.players);
@@ -525,8 +516,6 @@ export default class DungeonMaster {
 
                 // If a target was found
                 if (target !== null) {
-                    console.log("TARGET ACQUIRED");
-
                     // Check for ability triggers.
                     let chanceSum = 0;
                     encounter.actions.forEach((action) => {
@@ -536,8 +525,7 @@ export default class DungeonMaster {
                     // Roll dice
                     let diceRoll = rollDice("1d" + chanceSum);
 
-                    // Figure out which action triggers
-                    console.log("PICKING A RESPONSE");
+                    // Figure out which action triggers.
                     let lowerThreshold = 0;
                     let triggeredAction = "ATTACK";
                     let ability = null;
@@ -550,7 +538,6 @@ export default class DungeonMaster {
                         lowerThreshold = upperThreshold;
                     });
 
-                    console.log("TRIGGERING ACTIONS");
                     if (triggeredAction !== "ATTACK" && ability.area === "ONE") {
                         this.messages.push(`${encounter.name} uses ${ability.name}`);
                         if (ability.target === "ENEMY") {
@@ -589,8 +576,9 @@ export default class DungeonMaster {
                     this._handleResult(result);
                 });
             });
-            
-            this._broadcastUpdate();
         }
+
+        // Broadcast a dungeon wide update
+        this._broadcastUpdate();
     };
 }

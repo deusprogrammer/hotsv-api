@@ -175,7 +175,7 @@ export const getTarget = (targetName, context) => {
     return target;
 };
 
-const distributeLoot = (monster, context) => {
+export const distributeLoot = (monster, context) => {
     let lootDrops = [];
     let monsterDrops = [
         ...context.monsterTable[monster.id].drops.map((drop) => {
