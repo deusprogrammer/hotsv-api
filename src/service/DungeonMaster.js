@@ -108,23 +108,18 @@ export default class DungeonMaster {
             try {
                 switch (type) {
                     case 'PLAYER_JOIN':
-                        this.messages.push(actor + " joined dungeon");
                         this._addPlayer(actor);
                         break;
                     case 'PLAYER_LEAVE':
-                        this.messages.push(actor + " left dungeon");
                         this._removePlayer(actor);
                         break;
                     case 'SPAWN_MONSTER':
-                        this.messages.push(this.monsterTable[actor].name + " appeared");
                         this._addMonster(actor);
                         break;
                     case 'ATTACK':
-                        this.messages.push(`${actor} attacks`);
                         this._attack(actor, targets);
                         break;
                     case 'USE':
-                        this.messages.push(`${actor} used ${argument}`);
                         this._use(actor, targets, argument);
                         break;
                 }
@@ -205,18 +200,24 @@ export default class DungeonMaster {
     }
 
     _addPlayer = async (playerId) => {
+        this.messages.push(playerId + " joined dungeon");
         const player = await this.cbdClient.getCharacter(playerId);
         player.hp = player.maxHp;
+        player.dots = [];
+        player.buffs = [];
         this.players[playerId] = { ...player, buffs: [] };
     };
 
     _addMonster = (monsterName, personalName) => {
         let monster = spawnMonster(monsterName, personalName, this);
-        this.encounterTable[monster.spawnKey] = { ...monster, buffs: [] };
+        this.messages.push(monster.name + " appeared");
+        this.encounterTable[monster.spawnKey] = { ...monster, buffs: [], dots: [] };
         return monster.spawnKey;
     };
 
     _removePlayer = async (playerId) => {
+        this.messages.push(playerId + " left dungeon");
+
         let index = this.players.findIndex(
             (player) => playerId === player.name
         );
@@ -230,6 +231,8 @@ export default class DungeonMaster {
         if (this.cooldownTable[attackerName]) {
             throw `${attackerName} is on cooldown.`;
         }
+
+        this.messages.push(`${attackerName} attacks`);
 
         let results = attack(attackerName, defenderName, this);
 
@@ -295,6 +298,9 @@ export default class DungeonMaster {
 
         if (isItem) {
             ability.ap = 0;
+            this.messages.push(`${attackerName} used ${item.name}`);
+        } else {
+            this.messages.push(`${attackerName} used ${ability.name}`);
         }
 
         if (Math.max(0, attacker.ap) < ability.ap) {

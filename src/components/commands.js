@@ -356,17 +356,17 @@ const hurt = (
 
         // If this ability does DOT, then add an entry to the dotTable
         if (ability.procTime > 0 && !dead) {
-            if (!context.dotTable[defenderName]) {
-                context.dotTable[defenderName] = [];
+            if (!defender.dots) {
+                defender.dots = [];
             }
 
             // Check for existing effect
-            let existingEffect = context.dotTable[defenderName].find(
+            let existingEffect = defender.dots.find(
                 (entry) => entry.ability.id === ability.id
             );
             if (!existingEffect) {
                 // Add new effect
-                context.dotTable[defenderName].push({
+                commandResult.withAdd(defenderName, DOTS, {
                     ability,
                     tickCounter: ability.procTime,
                     cycles: ability.maxProcs,
@@ -565,7 +565,7 @@ const buff = (attackerName, defenderName, ability, context) => {
     });
 
     // Combine with other buffs
-    let existingBuffs = context.buffTable[defenderName] || [];
+    let existingBuffs = defender.buffs || [];
     let existingBuff = existingBuffs.find((buff) => buff.id === ability.id);
     if (existingBuff) {
         console.log('User already has buff');
