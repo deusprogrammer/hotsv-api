@@ -205,6 +205,7 @@ export default class DungeonMaster {
         player.hp = player.maxHp;
         player.dots = [];
         player.buffs = [];
+        player.items = [];
         this.players[playerId] = { ...player, buffs: [] };
     };
 
