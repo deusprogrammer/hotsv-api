@@ -409,9 +409,10 @@ const hurt = (
     }
 
     // Send messages for damage dealing
+    let damage, damageStat;
     if (hit) {
-        let damage = ability.ignoreDamageMods ? damageRoll : modifiedDamageRoll;
-        let damageStat = ability.dmgStat;
+        damage = ability.ignoreDamageMods ? damageRoll : modifiedDamageRoll;
+        damageStat = ability.dmgStat;
         let damageSource =
             ability.name !== 'attack' ? ability.name : attacker.name;
         let message = `${damageSource} dealt ${damage} ${damageStat} damage to ${defender.name}.`;
@@ -505,8 +506,8 @@ const hurt = (
         target: defenderName,
         action: "ATTACK",
         element: ability.element,
-        dmg: modifiedDamageRoll,
-        dmgType: ability.dmgStat
+        dmg: damage,
+        dmgType: damageStat
     });
 
     return commandResult
