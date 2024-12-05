@@ -290,7 +290,6 @@ const hurt = (
     let hit = true;
     let crit = false;
     let dead = false;
-    let encounterTable = context.encounterTable;
 
     if (ability.ignoreDamageMods) {
         modifiedDamageRoll = damageRoll;
@@ -309,23 +308,18 @@ const hurt = (
         `DAMAGE ROLL ${modifiedDamageRoll} (${damageRoll} + ${attacker.str} + ${ability.mods.str} + ${attackerBuffs.str})`
     );
 
-    let message;
     if (attackRoll === 20 && !isTrigger) {
         modifiedDamageRoll *= 2.0;
         crit = true;
-        message = `${attacker.name} ==> ${defender.name} -${modifiedDamageRoll}${ability.dmgStat}`;
     } else if (
         modifiedAttackRoll >= defender.totalAC + defenderBuffs.ac ||
         isTrigger
     ) {
         modifiedDamageRoll *= 1.0;
-        message = `${attacker.name} ==> ${defender.name} -${modifiedDamageRoll}${ability.dmgStat}`;
     } else if (attackRoll === 1) {
         hit = false;
-        message = `${attacker.name} ==> ${defender.name} MISS`;
     } else {
         modifiedDamageRoll = Math.ceil(modifiedDamageRoll * 0.5);
-        message = `${attacker.name} ==> ${defender.name} -${modifiedDamageRoll}${ability.dmgStat}`;
     }
 
     let endStatus;
@@ -506,6 +500,15 @@ const hurt = (
         }
     }
 
+    context.events.push({
+        actor: attackerName,
+        target: defenderName,
+        action: "ATTACK",
+        element: ability.element,
+        dmg: modifiedDamageRoll,
+        dmgType: ability.dmgStat
+    });
+
     return commandResult
         .withCritFlag(crit)
         .withHitFlag(hit)
@@ -587,6 +590,13 @@ const buff = (attackerName, defenderName, ability, context) => {
         `${defender.name} is affected by ${ability.name}`
     );
 
+    context.events.push({
+        actor: attackerName,
+        target: defenderName,
+        action: "BUFF",
+        element: "BUFF"
+    });
+
     return commandResult;
 };
 
@@ -643,6 +653,13 @@ const cleanse = (attackerName, defenderName, ability, context) => {
         commandResult.withAdjustment(attackerName, AP, -ability.apCost);
     }
 
+    context.events.push({
+        actor: attackerName,
+        target: defenderName,
+        action: "CLEANSE",
+        element: "CLEANSE"
+    });
+
     return commandResult;
 };
 
@@ -677,7 +694,7 @@ const heal = (attackerName, defenderName, ability, context) => {
     let defender = getTarget(defenderName, context);
 
     let healingAmount = Math.max(1, rollDice(ability.dmg));
-    if (ability.dmgStat.toLowerCase === 'hp') {
+    if (ability.dmgStat.toLowerCase() === 'hp') {
         let maxHeal = defender.maxHp - defender.hp;
         healingAmount = Math.min(maxHeal, healingAmount);
     }
@@ -691,6 +708,15 @@ const heal = (attackerName, defenderName, ability, context) => {
     commandResult.withMessage(
         `${ability.name} healed ${defender.name} for ${healingAmount} ${ability.dmgStat}`
     );
+
+    context.events.push({
+        actor: attackerName,
+        target: defenderName,
+        action: "HEAL",
+        element: ability.element,
+        dmg: healingAmount,
+        dmgType: ability.dmgStat
+    });
 
     return commandResult;
 };

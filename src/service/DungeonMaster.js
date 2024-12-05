@@ -8,7 +8,6 @@ import {
     getTarget,
     spawnMonster,
     CommandResult,
-    distributeLoot,
 } from '../components/commands.js';
 import { rollDice } from '../utils.js';
 
@@ -62,6 +61,7 @@ export default class DungeonMaster {
     buffTable = {};
     dotTable = {};
     messages = [];
+    events = [];
 
     cbdClient;
     broadcasterId;
@@ -162,6 +162,7 @@ export default class DungeonMaster {
                     buffs: this.buffTable,
                     dots: this.dotTable,
                     messages: this.messages,
+                    events: this.events,
                     cooldowns: this.cooldownTable
                 },
             })
